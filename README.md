@@ -14,6 +14,11 @@ The connection to the sensors is done via an expansion panel. I use TRRS plugs t
 
 ## Overview
 
+Supported sensors are specified by their I2C id and name. SensitiveEuroPi holds a table of known values and checks
+the I2C devices on startup.
+
+The connected devices are assigned to one of the 6 output channels of EuroPi. The output CV for each channel can be configured by a factor that is multiplied with the sensor reading.
+
 TBD
 
 ## Supported sensors
