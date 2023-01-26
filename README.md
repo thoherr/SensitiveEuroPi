@@ -20,7 +20,7 @@ TBD
 
 none yet...
 
-# Planned sensors
+## Planned sensors
 
 * VL53L0X - laser distance sensor
 * HC-SR04 - ultrasonic distance sensor
