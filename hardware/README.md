@@ -5,9 +5,9 @@ Raspberry Pi Pico and the power connector.
 
 The pins are (going from top to bottom on the PCB)
 
-4 - SDA
-3 - SCL
-2 - 3V3
+4 - SDA  
+3 - SCL  
+2 - 3V3  
 1 - GND
 
 In order to be able to connect sensors while the module is mounted in my rack, I used a TRRS connection with
