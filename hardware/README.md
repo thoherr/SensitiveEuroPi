@@ -16,3 +16,5 @@ for headphones and microphone (see picture).
 
 ![TRRS jack and plug](TRRS.png)
 
+I used [this jack](https://www.amazon.de/-/en/dp/B089222S84?psc=1&ref=ppx_yo2ov_dt_b_product_details)
+and [this plug with cable](https://www.amazon.de/-/en/dp/B0B3R6BM1B?psc=1&ref=ppx_yo2ov_dt_b_product_details).
