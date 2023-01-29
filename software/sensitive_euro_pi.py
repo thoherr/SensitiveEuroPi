@@ -6,6 +6,10 @@ from vl53l0x import VL53L0X
 
 VERSION = "0.1"
 
+VL53L0X_OFFSET = 30
+VL53L0X_MAX = 999
+MAX_VOLTAGE = 9.99
+
 class SensitiveEuroPi(EuroPiScript):
     def __init__(self):
         super().__init__()
@@ -70,9 +74,10 @@ class SensitiveEuroPi(EuroPiScript):
         oled.centre_text(f"Sensitive EuroPi\n{VERSION}")
         sleep(2)
         while True:
-            distance = min(self.vl53l0x.ping(), 1000)
-            cv1.voltage(distance/100)
-            oled.centre_text(f"{distance}")
+            distance = min(max(self.vl53l0x.ping() - VL53L0X_OFFSET, 0), VL53L0X_MAX)
+            voltage = distance / VL53L0X_MAX * MAX_VOLTAGE
+            cv1.voltage(voltage)
+            oled.centre_text(f"{distance} mm\n{voltage:.2f} V")
             sleep(0.1)
 
 if __name__ == "__main__":
