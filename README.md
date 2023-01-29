@@ -10,7 +10,7 @@ I recently got a EuroPi module from Allen Synthesis (https://github.com/Allen-Sy
 
 Since the EuroPi provides an I2C bus for expansion, I decided to concentrate on I2C capable sensory.
 
-The connection to the sensors is done via an expansion panel. I use TRRS plugs to connect the sensors to the EuroPi module (see ...TODO...).
+The connection to the sensors is done via an expansion panel. I use TRRS plugs to connect the sensors to the EuroPi module (see [hardware](hardware/README.md)).
 
 ## Overview
 
