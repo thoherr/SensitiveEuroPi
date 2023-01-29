@@ -23,15 +23,20 @@ TBD
 
 ## Supported sensors
 
-none yet...
+* VL53L0X - laser distance sensor
 
 ## Planned sensors
 
-* VL53L0X - laser distance sensor
 * HC-SR04 - ultrasonic distance sensor
 * GY-302 - light sensor
 
 ## Installation and configuration
 
 TBD
+
+## Caveats / Missing features
+
+* poor error handling
+* settings/configuration missing
+* enabling/disabling sensors based on I2C scan
 
