@@ -59,11 +59,17 @@ class Sensor:
         self.active = True
 
     def display_reading(self):
-        padding_x = self.index * int((OLED_WIDTH - 8)/3) + 4
+        column_width = int((OLED_WIDTH - 8)/3)
+        padding_x = self.index * column_width + 4
         padding_y = 0
         oled.text(f"{self.name:>4}", padding_x, padding_y, 1)
         padding_y = 12
-        oled.text(f"{self.reading.value:.2f}", padding_x, padding_y, 1)
+        if self.active:
+            oled.text(f"{self.reading.value:.2f}", padding_x, padding_y, 1)
+        else:
+            oled.text("  -  ", padding_x, padding_y, 1)
+        padding_y = 24
+        oled.fill_rect(padding_x, padding_y, int(self.reading.value / 10 * column_width), 4, 1)
 
     def update(self):
         if self.active:
