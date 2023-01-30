@@ -10,8 +10,8 @@ analog_in: not used
 knob_1: adjust the value of the current configuration parameter
 knob_2: not used
 
-button_1: cycle through editable configuration parameters
-button_2: edit current configuration parameter ??
+button_1: enable/disable sensor readings
+button_2: cycle through editable configuration parameters
 
 output_1: VL53L0X CV
 output_2: HC-SR04 CV
@@ -23,7 +23,7 @@ output_6: not used
 """
 
 from time import sleep
-from europi import oled, b1, din, cv1, cv2, cv3
+from europi import oled, b1, cv1, cv2, cv3, cv4, cv5, cv6
 from europi_script import EuroPiScript
 from machine import Pin, I2C
 from vl53l0x import VL53L0X
@@ -44,11 +44,14 @@ SensorReading = namedtuple("SensorReading", "valid value")
 
 class Sensor:
     active = False
-    def __init__(self, name, type, i2c_address, output):
+    def __init__(self, name, type, i2c_address, output, gate):
         self.name = name
         self.type = type
         self.i2c_address = i2c_address
         self.output = output
+        self.output.voltage(0)
+        self.gate = gate
+        self.gate.off()
 
     def __str__(self):
         status = f"@ 0x{self.i2c_address:x}" if self.active else "not connected"
@@ -62,6 +65,7 @@ class Sensor:
             reading = self.get_reading()
             if reading.valid:
                 self.output.voltage(reading.value)
+            self.gate.value(reading.valid)
 
     def get_reading(self):
         return SensorReading(False, 0)
@@ -71,8 +75,8 @@ class LaserDistanceSensorVL53L0X(Sensor):
     pre_periods = [12, 14, 16, 18]
     final_periods = [8, 10, 12, 14]
 
-    def __init__(self, output):
-        super().__init__("Laser distance", "VL53L0X", 0x29, output)
+    def __init__(self, output, gate):
+        super().__init__("Laser distance", "VL53L0X", 0x29, output, gate)
 
     def activate(self, i2c, state):
         # Pre: 12 to 18 (initialized to 14 by default)
@@ -99,16 +103,16 @@ class LaserDistanceSensorVL53L0X(Sensor):
         
 
 class SonicDistanceSensorHCSR04(Sensor):
-    def __init__(self, output):
-        super().__init__("Sonic distance", "HC-SR04", 0x57, output)
+    def __init__(self, output, gate):
+        super().__init__("Sonic distance", "HC-SR04", 0x57, output, gate)
 
     def activate(self, i2c, state):
         super().activate(i2c, state)
 
 
 class LightSensorGY302(Sensor):
-    def __init__(self, output):
-        super().__init__("Light", "GY302 (BH1750)", 0x23, output)
+    def __init__(self, output, gate):
+        super().__init__("Light", "GY302 (BH1750)", 0x23, output, gate)
 
     def activate(self, i2c):
         super().activate(i2c)
@@ -117,9 +121,9 @@ class LightSensorGY302(Sensor):
 class SensitiveEuroPi(EuroPiScript):
 
     sensors = [
-        LaserDistanceSensorVL53L0X(cv1),
-        SonicDistanceSensorHCSR04(cv2),
-        LightSensorGY302(cv3)
+        LaserDistanceSensorVL53L0X(cv1, cv4),
+        SonicDistanceSensorHCSR04(cv2, cv5),
+        LightSensorGY302(cv3, cv6)
         ];
 
     def __init__(self):
@@ -130,10 +134,9 @@ class SensitiveEuroPi(EuroPiScript):
         oled.contrast(0)  # dim the oled
 
         state = self.load_state_json()
-        #self.enabled = self.state.get("enabled", True)
+        self.enabled = state.get("enabled", True)
 
-        #din.handler(self.increment_counter)
-        #b1.handler(self.toggle_enablement)
+        b1.handler(self.toggle_enablement)
 
         self.i2c = I2C(id=I2C_ID, sda=Pin(I2C_SDA_PIN), scl=Pin(I2C_SCL_PIN))
 
@@ -153,32 +156,29 @@ class SensitiveEuroPi(EuroPiScript):
     def display_name(cls):
         return "Sensitive EuroPi"
 
-#    def increment_counter(self):
-#        if self.enabled:
-#            self.counter += 1
-#            self.save_state()
+    def toggle_enablement(self):
+            self.enabled = not self.enabled
+            self.save_state()
 
-#    def toggle_enablement(self):
-#            self.enabled = not self.enabled
-#            self.save_state()
-
-#    def save_state(self):
-#        """Save the current state variables as JSON."""
-#        # Don't save if it has been less than 5 seconds since last save.
-#        if self.last_saved() < 5000:
-#            return
-# 
-#         state = {
-#             .... ADD SENSOR STATES
-#         }
-#         self.save_state_json(state)
+    def save_state(self):
+        """Save the current state variables as JSON."""
+        # Don't save if it has been less than 5 seconds since last save.
+        if self.last_saved() < 5000:
+            return
+ 
+        state = {
+             "enabled": self.enabled
+            #  .... ADD SENSOR STATES
+        }
+        self.save_state_json(state)
 
     def main(self):
         oled.centre_text(f"Sensitive EuroPi\n{VERSION}")
         sleep(2)
         while True:
-            for sensor in self.sensors:
-                sensor.update()
+            if self.enabled:
+                for sensor in self.sensors:
+                    sensor.update()
 
 
 # Main script execution
