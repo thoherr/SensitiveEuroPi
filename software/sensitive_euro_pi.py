@@ -30,6 +30,10 @@ from vl53l0x import VL53L0X
 
 VERSION = "0.2"
 
+I2C_ID = 1
+I2C_SDA_PIN = 2
+I2C_SCL_PIN = 3
+
 VL53L0X_OFFSET_MM = 30
 VL53L0X_MAX_MM = 999
 MAX_VOLTAGE = 9.99
@@ -37,12 +41,58 @@ MAX_VOLTAGE = 9.99
 pre_periods = [12, 14, 16, 18]
 final_periods = [8, 10, 12, 14]
 
+class Sensor:
+    active = False
+    def __init__(self, name, type, i2c_address):
+        self.name = name
+        self.type = type
+        self.i2c_address = i2c_address
+
+    def __str__(self):
+        status = f"@ 0x{self.i2c_address:x}" if self.active else "not connected"
+        return f"{self.name} - {self.type} {status}"
+
+    def activate(self):
+        self.active = True
+
+
+class LaserDistanceSensorVL53L0X(Sensor):
+    def __init__(self):
+        super().__init__("Laser distance", "VL53L0X", 0x29)
+
+    def activate(self):
+        super().activate()
+
+
+class SonicDistanceSensorHCSR04(Sensor):
+    def __init__(self):
+        super().__init__("Sonic distance", "HC-SR04", 0x57)
+
+    def activate(self):
+        super().activate()
+
+
+class LightSensorGY302(Sensor):
+    def __init__(self):
+        super().__init__("Light", "GY302 (BH1750)", 0x23)
+
+    def activate(self):
+        super().activate()
+
+
 class SensitiveEuroPi(EuroPiScript):
+
+    sensors = [
+        LaserDistanceSensorVL53L0X(),
+        SonicDistanceSensorHCSR04(),
+        LightSensorGY302()
+        ];
+
     def __init__(self):
         super().__init__()
 
         # Configure EuroPi options to improve performance.
-        b2.debounce_delay = 200
+        b1.debounce_delay = 200
         oled.contrast(0)  # dim the oled
 
         state = self.load_state_json()
@@ -57,16 +107,26 @@ class SensitiveEuroPi(EuroPiScript):
         #din.handler(self.increment_counter)
         #b1.handler(self.toggle_enablement)
 
-        self.i2c = self.init_i2c()
-        self.vl53l0x = VL53L0X(i2c)
+        self.i2c = I2C(id=I2C_ID, sda=Pin(I2C_SDA_PIN), scl=Pin(I2C_SCL_PIN))
+
+        self.init_sensors()
+
+        self.vl53l0x = VL53L0X(self.i2c)
         self.config_vl53l0x()
 
-    def init_i2c(self):
-        # TODO: make this configurable
-        sda = Pin(2)
-        scl = Pin(3)
-        id = 1
-        return I2C(id=id, sda=sda, scl=scl)
+        for sensor in self.sensors:
+            print(sensor)
+
+    def init_sensors(self):
+        i2c_addresses = self.i2c.scan()
+        print(i2c_addresses)
+        for sensor in self.sensors:
+            if sensor.i2c_address in i2c_addresses:
+                sensor.activate()
+                print(f"{sensor.name} present")
+            else:
+                print(f"{sensor.name} not found")
+                
 
     def config_vl53l0x(self):
         self.vl53l0x.set_Vcsel_pulse_period(self.vl53l0x.vcsel_period_type[0], self.pre_period)
@@ -107,5 +167,8 @@ class SensitiveEuroPi(EuroPiScript):
             oled.centre_text(f"{distance} mm\n{voltage:.2f} V")
             sleep(0.1)
 
-if __name__ == "__main__":
-    SensitiveEuroPi().main()
+
+# Main script execution
+if __name__ == '__main__':
+    script = SensitiveEuroPi()
+    script.main()
