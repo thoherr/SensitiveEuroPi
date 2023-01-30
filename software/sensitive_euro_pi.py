@@ -28,6 +28,8 @@ from europi_script import EuroPiScript
 from machine import Pin, I2C
 from vl53l0x import VL53L0X
 
+from collections import namedtuple
+
 VERSION = "0.2"
 
 I2C_ID = 1
@@ -37,6 +39,8 @@ I2C_SCL_PIN = 3
 VL53L0X_OFFSET_MM = 30
 VL53L0X_MAX_MM = 999
 MAX_VOLTAGE = 9.99
+
+SensorReading = namedtuple("SensorReading", "valid value")
 
 class Sensor:
     active = False
@@ -55,10 +59,12 @@ class Sensor:
 
     def update(self):
         if self.active:
-            self.output.voltage(self.calculate_voltage())
+            reading = self.get_reading()
+            if reading.valid:
+                self.output.voltage(reading.value)
 
-    def calculate_voltage(self):
-        return 0
+    def get_reading(self):
+        return SensorReading(False, 0)
 
 
 class LaserDistanceSensorVL53L0X(Sensor):
@@ -78,10 +84,14 @@ class LaserDistanceSensorVL53L0X(Sensor):
         self.config()
         super().activate(i2c, state)
 
-    def calculate_voltage(self):
+    def get_reading(self):
         distance = min(max(self.vl53l0x.ping() - VL53L0X_OFFSET_MM, 0), VL53L0X_MAX_MM)
         voltage = distance / VL53L0X_MAX_MM * MAX_VOLTAGE
         oled.centre_text(f"{distance} mm\n{voltage:.2f} V")
+        if voltage < MAX_VOLTAGE:
+            return SensorReading(True, voltage)
+        else:
+            return SensorReading(False, 0)
 
     def config(self):
         self.vl53l0x.set_Vcsel_pulse_period(self.vl53l0x.vcsel_period_type[0], self.pre_period)
