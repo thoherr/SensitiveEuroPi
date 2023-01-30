@@ -16,14 +16,14 @@ button_2: cycle through editable configuration parameters
 output_1: VL53L0X CV
 output_2: HC-SR04 CV
 output_3: GY302 CV
-output_4: not used
-output_5: not used
-output_6: not used
+output_4: VL53L0X gate (CV valid)
+output_5: HC-SR04 gate (CV valid)
+output_6: GY302 gate (CV valid)
 
 """
 
 from time import sleep
-from europi import oled, b1, cv1, cv2, cv3, cv4, cv5, cv6
+from europi import oled, b1, cv1, cv2, cv3, cv4, cv5, cv6, OLED_WIDTH, OLED_HEIGHT, CHAR_HEIGHT
 from europi_script import EuroPiScript
 from machine import Pin, I2C
 from vl53l0x import VL53L0X
@@ -36,17 +36,15 @@ I2C_ID = 1
 I2C_SDA_PIN = 2
 I2C_SCL_PIN = 3
 
-VL53L0X_OFFSET_MM = 30
-VL53L0X_MAX_MM = 999
-MAX_VOLTAGE = 9.99
-
 SensorReading = namedtuple("SensorReading", "valid value")
 
 class Sensor:
     active = False
-    def __init__(self, name, type, i2c_address, output, gate):
+    reading = SensorReading(False, 0)
+    def __init__(self, index, name, description, i2c_address, output, gate):
+        self.index = index
         self.name = name
-        self.type = type
+        self.description = description
         self.i2c_address = i2c_address
         self.output = output
         self.output.voltage(0)
@@ -55,44 +53,53 @@ class Sensor:
 
     def __str__(self):
         status = f"@ 0x{self.i2c_address:x}" if self.active else "not connected"
-        return f"{self.name} - {self.type} {status}"
+        return f"{self.name} ({self.description}) {status}"
 
     def activate(self, i2c, state):
         self.active = True
 
+    def display_reading(self):
+        padding_x = self.index * int((OLED_WIDTH - 8)/3) + 4
+        padding_y = 0
+        oled.text(f"{self.name:>4}", padding_x, padding_y, 1)
+        padding_y = 12
+        oled.text(f"{self.reading.value:.2f}", padding_x, padding_y, 1)
+
     def update(self):
         if self.active:
-            reading = self.get_reading()
-            if reading.valid:
-                self.output.voltage(reading.value)
-            self.gate.value(reading.valid)
+            self.reading = self.get_reading()
+            if self.reading.valid:
+                self.output.voltage(self.reading.value)
+            self.gate.value(self.reading.valid)
 
     def get_reading(self):
         return SensorReading(False, 0)
 
 
 class LaserDistanceSensorVL53L0X(Sensor):
+    OFFSET_MM = 30
+    MAX_MM = 999
+    MAX_VOLTAGE = 9.99
     pre_periods = [12, 14, 16, 18]
     final_periods = [8, 10, 12, 14]
 
     def __init__(self, output, gate):
-        super().__init__("Laser distance", "VL53L0X", 0x29, output, gate)
+        super().__init__(0, "LToF", "Laser distance sensor VL53L0X", 0x29, output, gate)
 
     def activate(self, i2c, state):
         # Pre: 12 to 18 (initialized to 14 by default)
-        self.pre_period = state.get("pre_period", 14)
+        self.pre_period = state.get("pre_period", 14)  # TODO: This should be configurable by UI
         # Final: 8 to 14 (initialized to 10 by default)
-        self.final_period = state.get("final_period", 10)
+        self.final_period = state.get("final_period", 10)  # TODO: This should be configurable by UI
 
         self.vl53l0x = VL53L0X(i2c)
         self.config()
         super().activate(i2c, state)
 
     def get_reading(self):
-        distance = min(max(self.vl53l0x.ping() - VL53L0X_OFFSET_MM, 0), VL53L0X_MAX_MM)
-        voltage = distance / VL53L0X_MAX_MM * MAX_VOLTAGE
-        oled.centre_text(f"{distance} mm\n{voltage:.2f} V")
-        if voltage < MAX_VOLTAGE:
+        distance = min(max(self.vl53l0x.ping() - self.OFFSET_MM, 0), self.MAX_MM)
+        voltage = distance / self.MAX_MM * self.MAX_VOLTAGE
+        if voltage < self.MAX_VOLTAGE:
             return SensorReading(True, voltage)
         else:
             return SensorReading(False, 0)
@@ -104,7 +111,7 @@ class LaserDistanceSensorVL53L0X(Sensor):
 
 class SonicDistanceSensorHCSR04(Sensor):
     def __init__(self, output, gate):
-        super().__init__("Sonic distance", "HC-SR04", 0x57, output, gate)
+        super().__init__(1, "SON", "Sonic distance sensor HC-SR04", 0x57, output, gate)
 
     def activate(self, i2c, state):
         super().activate(i2c, state)
@@ -112,7 +119,7 @@ class SonicDistanceSensorHCSR04(Sensor):
 
 class LightSensorGY302(Sensor):
     def __init__(self, output, gate):
-        super().__init__("Light", "GY302 (BH1750)", 0x23, output, gate)
+        super().__init__(2, "LUX", "Brightness sensor GY302 (BH1750)", 0x23, output, gate)
 
     def activate(self, i2c):
         super().activate(i2c)
@@ -163,14 +170,15 @@ class SensitiveEuroPi(EuroPiScript):
     def save_state(self):
         """Save the current state variables as JSON."""
         # Don't save if it has been less than 5 seconds since last save.
-        if self.last_saved() < 5000:
-            return
+#         if self.last_saved() < 5000:
+#             return
  
         state = {
              "enabled": self.enabled
             #  .... ADD SENSOR STATES
         }
         self.save_state_json(state)
+
 
     def main(self):
         oled.centre_text(f"Sensitive EuroPi\n{VERSION}")
@@ -179,6 +187,13 @@ class SensitiveEuroPi(EuroPiScript):
             if self.enabled:
                 for sensor in self.sensors:
                     sensor.update()
+                oled.fill(0)
+                for sensor in self.sensors:
+                    sensor.display_reading()
+                oled.show()
+            else:
+                oled.centre_text(f"Sensitive EuroPi\n{VERSION}\nPAUSED")
+                sleep(0.25)
 
 
 # Main script execution
