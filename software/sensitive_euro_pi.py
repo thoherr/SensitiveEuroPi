@@ -23,11 +23,12 @@ output_6: GY302 gate (CV valid)
 """
 
 from time import sleep
+from math import log
 from europi import oled, b1, cv1, cv2, cv3, cv4, cv5, cv6, OLED_WIDTH, OLED_HEIGHT, CHAR_HEIGHT
 from europi_script import EuroPiScript
 from machine import Pin, I2C
 from vl53l0x import VL53L0X
-
+from utime import ticks_diff, ticks_ms
 from collections import namedtuple
 
 VERSION = "0.2"
@@ -56,6 +57,8 @@ class Sensor:
         return f"{self.name} ({self.description}) {status}"
 
     def activate(self, i2c, state):
+        self.i2c = i2c
+        self.state = state
         self.active = True
 
     def display_reading(self):
@@ -124,11 +127,35 @@ class SonicDistanceSensorHCSR04(Sensor):
 
 
 class LightSensorGY302(Sensor):
+    ticks_last_reading = 0
+    last_voltage = 0
+    MEASUREMENT_DURATION = 110
+    CONTINUOUS_LOW_RES_MODE = 0x13
+    CONTINUOUS_HIGH_RES_MODE_1 = 0x10
+    CONTINUOUS_HIGH_RES_MODE_2 = 0x11
+    ONE_TIME_HIGH_RES_MODE_1 = 0x20
+    ONE_TIME_HIGH_RES_MODE_2 = 0x21
+    ONE_TIME_LOW_RES_MODE = 0x23
+
     def __init__(self, output, gate):
         super().__init__(2, "LUX", "Brightness sensor GY302 (BH1750)", 0x23, output, gate)
 
-    def activate(self, i2c):
-        super().activate(i2c)
+    def activate(self, i2c, state):
+        super().activate(i2c, state)
+        
+    def convert_to_number(self, data):
+        return data[1] + (256 * data[0])
+
+    def read_light(self):
+        data = self.i2c.readfrom_mem(self.i2c_address, self.ONE_TIME_HIGH_RES_MODE_1, 3)
+        return self.convert_to_number(data)
+
+    def get_reading(self):
+        ticks = ticks_ms()
+        if ticks_diff(ticks, self.ticks_last_reading) > self.MEASUREMENT_DURATION:
+            self.last_voltage = log(1 + self.read_light()) # this gives a scale from 0 to about 11
+            self.ticks_last_reading = ticks
+        return SensorReading(True, self.last_voltage)
 
 
 class SensitiveEuroPi(EuroPiScript):
@@ -188,7 +215,7 @@ class SensitiveEuroPi(EuroPiScript):
 
     def main(self):
         oled.centre_text(f"Sensitive EuroPi\n{VERSION}")
-        sleep(2)
+        sleep(1)
         while True:
             if self.enabled:
                 for sensor in self.sensors:
