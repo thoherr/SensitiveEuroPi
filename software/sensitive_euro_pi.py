@@ -56,6 +56,11 @@ class Sensor:
         status = f"@ 0x{self.i2c_address:x}" if self.active else "not connected"
         return f"{self.name} ({self.description}) {status}"
 
+    def reset(self):
+        self.i2c = None
+        self.state = None
+        self.active = False
+
     def activate(self, i2c, state):
         self.i2c = i2c
         self.state = state
@@ -147,7 +152,7 @@ class LightSensorGY302(Sensor):
         return data[1] + (256 * data[0])
 
     def read_light(self):
-        data = self.i2c.readfrom_mem(self.i2c_address, self.ONE_TIME_HIGH_RES_MODE_1, 3)
+        data = self.i2c.readfrom_mem(self.i2c_address, self.ONE_TIME_HIGH_RES_MODE_1, 3)            
         return self.convert_to_number(data)
 
     def get_reading(self):
@@ -173,24 +178,26 @@ class SensitiveEuroPi(EuroPiScript):
         b1.debounce_delay = 200
         oled.contrast(0)  # dim the oled
 
-        state = self.load_state_json()
-        self.enabled = state.get("enabled", True)
+        self.state = self.load_state_json()
+        self.enabled = self.state.get("enabled", True)
 
         b1.handler(self.toggle_enablement)
 
         self.i2c = I2C(id=I2C_ID, sda=Pin(I2C_SDA_PIN), scl=Pin(I2C_SCL_PIN))
 
-        self.init_sensors(state)
+        self.init_sensors()
 
         for sensor in self.sensors:
             print(sensor)
 
-    def init_sensors(self, state):
+    def init_sensors(self):
+        for sensor in self.sensors:
+            sensor.reset()
         i2c_addresses = self.i2c.scan()
         print(i2c_addresses)
         for sensor in self.sensors:
             if sensor.i2c_address in i2c_addresses:
-                sensor.activate(self.i2c, state)
+                sensor.activate(self.i2c, self.state)
 
     @classmethod
     def display_name(cls):
@@ -206,20 +213,28 @@ class SensitiveEuroPi(EuroPiScript):
 #         if self.last_saved() < 5000:
 #             return
  
-        state = {
+        self.state = {
              "enabled": self.enabled
             #  .... ADD SENSOR STATES
         }
-        self.save_state_json(state)
+        self.save_state_json(self.state)
 
 
     def main(self):
         oled.centre_text(f"Sensitive EuroPi\n{VERSION}")
         sleep(1)
+        caught_exception = False
         while True:
+            if caught_exception:
+                sleep(1)
+                self.init_sensors()
+                caught_exception = False
             if self.enabled:
                 for sensor in self.sensors:
-                    sensor.update()
+                    try:
+                        sensor.update()
+                    except Exception:
+                        caught_exception = True
                 oled.fill(0)
                 for sensor in self.sensors:
                     sensor.display_reading()
@@ -233,3 +248,4 @@ class SensitiveEuroPi(EuroPiScript):
 if __name__ == '__main__':
     script = SensitiveEuroPi()
     script.main()
+  
