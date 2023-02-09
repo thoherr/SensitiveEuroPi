@@ -23,12 +23,12 @@ TBD
 
 ## Supported sensors
 
+* GY-302 - light sensor
 * VL53L0X - laser distance sensor
 
 ## Planned sensors
 
 * HC-SR04 - ultrasonic distance sensor
-* GY-302 - light sensor
 
 ## Installation and configuration
 
